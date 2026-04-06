@@ -211,8 +211,8 @@ export function buildWealthStructure(
   }
 
   // 去重
-  const uniqueSuited = [...new Set(suitedPaths)].slice(0, 5)
-  const uniqueUnsuited = [...new Set(unsuitedPaths)].slice(0, 4)
+  const uniqueSuited = Array.from(new Set(suitedPaths)).slice(0, 5)
+  const uniqueUnsuited = Array.from(new Set(unsuitedPaths)).slice(0, 4)
 
   // 综合分析文字
   const dmStr = dayMaster.strength
