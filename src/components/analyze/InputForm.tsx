@@ -1,6 +1,6 @@
 'use client'
 
-import { useState } from 'react'
+import { useState, FormEvent } from 'react'
 import { useRouter } from 'next/navigation'
 import type { AnalysisInput } from '@/lib/types'
 import { SHICHEN_OPTIONS } from '@/lib/bazi/constants'
@@ -11,38 +11,40 @@ const years = Array.from({ length: 120 }, (_, i) => currentYear - i)
 const months = Array.from({ length: 12 }, (_, i) => i + 1)
 const days = Array.from({ length: 31 }, (_, i) => i + 1)
 
+interface FormState {
+  gender: 'male' | 'female'
+  year: number
+  month: number
+  day: number
+  hourBranchIndex: number
+  city: string
+  range: number
+}
+
+const defaultForm: FormState = {
+  gender: 'male',
+  year: 1990,
+  month: 6,
+  day: 15,
+  hourBranchIndex: -1,
+  city: '',
+  range: 10,
+}
+
 export default function InputForm() {
   const router = useRouter()
   const [loading, setLoading] = useState(false)
-  const [error, setError] = useState<string | null>(null)
+  const [error, setError] = useState('')
+  const [form, setForm] = useState<FormState>(defaultForm)
 
-  const [form, setForm] = useState<{
-    gender: 'male' | 'female'
-    year: number
-    month: number
-    day: number
-    hourBranchIndex: number
-    city: string
-    range: number
-  }>({
-    gender: 'male',
-    year: 1990,
-    month: 6,
-    day: 15,
-    hourBranchIndex: -1,
-    city: '',
-    range: 10,
-  })
-
-  function set<K extends keyof typeof form>(key: K, value: (typeof form)[K]) {
-    setForm(prev => ({ ...prev, [key]: value }))
+  function patch(partial: Partial<FormState>) {
+    setForm(prev => ({ ...prev, ...partial }))
   }
 
-  async function handleSubmit(e: React.FormEvent) {
+  async function handleSubmit(e: FormEvent<HTMLFormElement>) {
     e.preventDefault()
-    setError(null)
+    setError('')
 
-    // Validate
     if (form.year < 1900 || form.year > currentYear) {
       setError('请输入有效的出生年份（1900–今年）')
       return
@@ -68,32 +70,35 @@ export default function InputForm() {
       })
 
       if (!res.ok) {
-        const data = await res.json().catch(() => ({}))
-        throw new Error(data.error ?? '分析失败，请稍后重试')
+        const json = await res.json().catch(() => ({ error: '' }))
+        throw new Error((json.error as string) || '分析失败，请稍后重试')
       }
 
       const result = await res.json()
       sessionStorage.setItem('baziAnalysis', JSON.stringify(result))
       router.push('/result')
     } catch (err) {
-      setError(err instanceof Error ? err.message : '发生未知错误，请重试')
+      const msg = err instanceof Error ? err.message : '发生未知错误，请重试'
+      setError(msg)
       setLoading(false)
     }
   }
 
-  if (loading) return <LoadingState />
+  if (loading) {
+    return <LoadingState />
+  }
 
   return (
     <form onSubmit={handleSubmit} className="space-y-8">
-      {/* Gender */}
+      {/* 性别 */}
       <div>
-        <Label text="性别" required />
+        <FieldLabel text="性别" required />
         <div className="mt-2 flex gap-3">
           {(['male', 'female'] as const).map(g => (
             <button
               key={g}
               type="button"
-              onClick={() => set('gender', g)}
+              onClick={() => patch({ gender: g })}
               className={`flex-1 rounded-lg border py-3 text-sm font-medium transition-all ${
                 form.gender === g
                   ? 'border-gold bg-[rgba(201,168,76,0.12)] text-gold'
@@ -106,21 +111,19 @@ export default function InputForm() {
         </div>
       </div>
 
-      {/* Birth date */}
+      {/* 出生日期 */}
       <div>
-        <Label text="出生日期" required hint="请使用公历（阳历）日期" />
+        <FieldLabel text="出生日期" required hint="请使用公历（阳历）日期" />
         <div className="mt-2 grid grid-cols-3 gap-3">
           <div>
             <div className="mb-1 text-xs text-ink-muted">年</div>
             <select
               className="input-field"
               value={form.year}
-              onChange={e => set('year', Number(e.target.value))}
+              onChange={e => patch({ year: Number(e.target.value) })}
             >
               {years.map(y => (
-                <option key={y} value={y}>
-                  {y} 年
-                </option>
+                <option key={y} value={y}>{y} 年</option>
               ))}
             </select>
           </div>
@@ -129,12 +132,10 @@ export default function InputForm() {
             <select
               className="input-field"
               value={form.month}
-              onChange={e => set('month', Number(e.target.value))}
+              onChange={e => patch({ month: Number(e.target.value) })}
             >
               {months.map(m => (
-                <option key={m} value={m}>
-                  {m} 月
-                </option>
+                <option key={m} value={m}>{m} 月</option>
               ))}
             </select>
           </div>
@@ -143,25 +144,23 @@ export default function InputForm() {
             <select
               className="input-field"
               value={form.day}
-              onChange={e => set('day', Number(e.target.value))}
+              onChange={e => patch({ day: Number(e.target.value) })}
             >
               {days.map(d => (
-                <option key={d} value={d}>
-                  {d} 日
-                </option>
+                <option key={d} value={d}>{d} 日</option>
               ))}
             </select>
           </div>
         </div>
       </div>
 
-      {/* Birth time */}
+      {/* 出生时辰 */}
       <div>
-        <Label text="出生时辰" hint="不知道可选"时辰不详"，影响时柱推算" />
+        <FieldLabel text="出生时辰" hint="不知道可选时辰不详，仅影响时柱推算" />
         <div className="mt-2 grid grid-cols-3 gap-2 sm:grid-cols-4">
           <button
             type="button"
-            onClick={() => set('hourBranchIndex', -1)}
+            onClick={() => patch({ hourBranchIndex: -1 })}
             className={`rounded-lg border py-2.5 text-xs transition-all ${
               form.hourBranchIndex === -1
                 ? 'border-gold bg-[rgba(201,168,76,0.12)] text-gold'
@@ -174,7 +173,7 @@ export default function InputForm() {
             <button
               key={branchIndex}
               type="button"
-              onClick={() => set('hourBranchIndex', branchIndex)}
+              onClick={() => patch({ hourBranchIndex: branchIndex })}
               className={`rounded-lg border py-2 text-center transition-all ${
                 form.hourBranchIndex === branchIndex
                   ? 'border-gold bg-[rgba(201,168,76,0.12)] text-gold'
@@ -188,28 +187,28 @@ export default function InputForm() {
         </div>
       </div>
 
-      {/* City */}
+      {/* 出生城市 */}
       <div>
-        <Label text="出生城市" hint="可选，用于记录参考" />
+        <FieldLabel text="出生城市" hint="可选，用于记录参考" />
         <input
           type="text"
           className="input-field mt-2"
           placeholder="如：北京、上海、广州..."
           value={form.city}
-          onChange={e => set('city', e.target.value)}
+          onChange={e => patch({ city: e.target.value })}
           maxLength={30}
         />
       </div>
 
-      {/* Range */}
+      {/* 分析年限 */}
       <div>
-        <Label text="财运分析年限" required />
+        <FieldLabel text="财运分析年限" required />
         <div className="mt-2 grid grid-cols-4 gap-2">
           {[1, 3, 5, 10].map(r => (
             <button
               key={r}
               type="button"
-              onClick={() => set('range', r)}
+              onClick={() => patch({ range: r })}
               className={`rounded-lg border py-3 text-sm font-medium transition-all ${
                 form.range === r
                   ? 'border-gold bg-[rgba(201,168,76,0.12)] text-gold'
@@ -222,14 +221,14 @@ export default function InputForm() {
         </div>
       </div>
 
-      {/* Error */}
+      {/* 错误提示 */}
       {error && (
         <div className="rounded-lg border border-[rgba(248,113,113,0.3)] bg-[rgba(248,113,113,0.08)] px-4 py-3 text-sm text-[#F87171]">
           {error}
         </div>
       )}
 
-      {/* Submit */}
+      {/* 提交 */}
       <button type="submit" className="btn-primary w-full py-4 text-base">
         <span>开始财运分析</span>
         <span className="text-lg">→</span>
@@ -242,7 +241,7 @@ export default function InputForm() {
   )
 }
 
-function Label({
+function FieldLabel({
   text,
   hint,
   required,
